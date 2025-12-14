@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="docker-clean.cmd" />
+    <File Path="docker-compose.yml" />
+    <File Path="LICENSE" />
+    <File Path="README.md" />
+  </Folder>
+  <Project Path="Shuttle.Hopper.Kafka.Tests/Shuttle.Hopper.Kafka.Tests.csproj" />
+  <Project Path="Shuttle.Hopper.Kafka/Shuttle.Hopper.Kafka.csproj" />
+</Solution>
