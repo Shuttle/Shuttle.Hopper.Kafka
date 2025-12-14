@@ -366,14 +366,14 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
         }
         catch (OperationCanceledException)
         {
-            await _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[has-pending/cancelled]", true), cancellationToken);
+            await _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[has-pending/cancelled]", false), cancellationToken);
         }
         finally
         {
             _lock.Release();
         }
 
-        return true;
+        return false;
     }
 
     public async Task PurgeAsync(CancellationToken cancellationToken = default)
