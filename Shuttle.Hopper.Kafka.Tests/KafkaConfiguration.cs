@@ -12,17 +12,20 @@ public class KafkaConfiguration
 
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
 
-        services.AddKafka(builder =>
+        services.AddHopper(hopperBuilder =>
         {
-            var kafkaOptions = new KafkaOptions
+            hopperBuilder.UseKafka(builder =>
             {
-                BootstrapServers = "localhost:9092",
-                UseCancellationToken = useCancellationToken,
-                ConsumeTimeout = TimeSpan.FromSeconds(5),
-                ConnectionsMaxIdle = TimeSpan.FromSeconds(5)
-            };
+                var kafkaOptions = new KafkaOptions
+                {
+                    BootstrapServers = "localhost:9092",
+                    UseCancellationToken = useCancellationToken,
+                    ConsumeTimeout = TimeSpan.FromSeconds(5),
+                    ConnectionsMaxIdle = TimeSpan.FromSeconds(5)
+                };
 
-            builder.AddOptions("local", kafkaOptions);
+                builder.AddOptions("local", kafkaOptions);
+            });
         });
 
         return services;

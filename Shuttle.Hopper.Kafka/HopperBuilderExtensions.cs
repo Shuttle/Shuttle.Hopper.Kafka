@@ -1,17 +1,16 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
-using Shuttle.Core.Contract;
 
 namespace Shuttle.Hopper.Kafka;
 
-public static class ServiceCollectionExtensions
+public static class HopperBuilderExtensions
 {
-    extension(IServiceCollection services)
+    extension(HopperBuilder hopperBuilder)
     {
-        public IServiceCollection AddKafka(Action<KafkaBuilder>? builder = null)
+        public IServiceCollection UseKafka(Action<KafkaBuilder>? builder = null)
         {
-            var kafkaBuilder = new KafkaBuilder(Guard.AgainstNull(services));
+            var services = hopperBuilder.Services;
+            var kafkaBuilder = new KafkaBuilder(services);
 
             builder?.Invoke(kafkaBuilder);
 
@@ -56,7 +55,7 @@ public static class ServiceCollectionExtensions
                 });
             }
 
-            services.TryAddSingleton<ITransportFactory, KafkaStreamFactory>();
+            services.AddSingleton<ITransportFactory, KafkaStreamFactory>();
 
             return services;
         }

@@ -9,7 +9,7 @@ namespace Shuttle.Hopper.Kafka;
 
 public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurgeTransport, IDisposable
 {
-    private readonly ServiceBusOptions _serviceBusOptions;
+    private readonly HopperOptions _hopperOptions;
     private readonly IConsumer<Ignore, string> _consumer;
     private readonly ConsumerConfig _consumerConfig;
     private readonly KafkaOptions _kafkaOptions;
@@ -23,9 +23,9 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
     private bool _disposed;
     private bool _subscribed;
 
-    public KafkaStream(ServiceBusOptions serviceBusOptions, KafkaOptions kafkaOptions, TransportUri uri)
+    public KafkaStream(HopperOptions hopperOptions, KafkaOptions kafkaOptions, TransportUri uri)
     {
-        _serviceBusOptions = serviceBusOptions;
+        _hopperOptions = hopperOptions;
         _kafkaOptions = Guard.AgainstNull(kafkaOptions);
 
         Uri = Guard.AgainstNull(uri);
@@ -81,39 +81,26 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
 
             try
             {
-                _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[dispose.producer.flush/starting]")).GetAwaiter().GetResult();
                 _producer.Flush(_operationTimeout);
-                _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[dispose.producer.flush/completed]")).GetAwaiter().GetResult();
-            }
-            catch (Exception ex)
-            {
-                // ignore
-                 _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[dispose.producer.flush/exception]", ex)).GetAwaiter().GetResult();
-            }
-
-            _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[dispose.producer.dispose/starting]")).GetAwaiter().GetResult();
-            _producer.Dispose();
-            _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[dispose.producer.dispose/completed]")).GetAwaiter().GetResult();
-
-            try
-            {
-                _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[dispose.consumer.unsubscribe/starting]")).GetAwaiter().GetResult();
-                _consumer.Unsubscribe();
-                _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[dispose.consumer.unsubscribe/completed]")).GetAwaiter().GetResult();
-
-                _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[dispose.consumer.close/starting]")).GetAwaiter().GetResult();
-                _consumer.Close();
-                _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[dispose.consumer.close/completed]")).GetAwaiter().GetResult();
             }
             catch
             {
                 // ignore
             }
 
-            _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[dispose.consumer.dispose/starting]")).GetAwaiter().GetResult();
-            _consumer.Dispose();
-            _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[dispose.consumer.dispose/starting]")).GetAwaiter().GetResult();
+            _producer.Dispose();
 
+            try
+            {
+                _consumer.Unsubscribe();
+                _consumer.Close();
+            }
+            catch
+            {
+                // ignore
+            }
+
+            _consumer.Dispose();
             _disposed = true;
         }
         finally
@@ -151,18 +138,18 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
                     _consumer.StoreOffset(token.ConsumeResult);
                 }
             }
-
-            await _serviceBusOptions.MessageAcknowledged.InvokeAsync(new(this, acknowledgementToken), cancellationToken);
         }
         finally
         {
             _lock.Release();
         }
+
+        await _hopperOptions.MessageAcknowledged.InvokeAsync(new(this, acknowledgementToken), cancellationToken);
     }
 
     public async Task CreateAsync(CancellationToken cancellationToken = default)
     {
-        await _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[create/starting]"), cancellationToken);
+        await _hopperOptions.TransportOperation.InvokeAsync(new(this, "[create/starting]"), cancellationToken);
 
         await _lock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
 
@@ -173,16 +160,10 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
                 BootstrapServers = _consumerConfig.BootstrapServers
             }).Build();
 
-            await _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[create.get-metadata/starting]"), cancellationToken);
-
             var metadata = client.GetMetadata(Topic, _operationTimeout);
-
-            await _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[create.get-metadata/completed]"), cancellationToken);
 
             if (metadata == null)
             {
-                await _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[create.create-topics/starting]"), cancellationToken);
-
                 await client.CreateTopicsAsync([
                     new()
                     {
@@ -191,73 +172,61 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
                         NumPartitions = _kafkaOptions.NumPartitions
                     }
                 ]).ConfigureAwait(false);
-
-                await _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[create.create-topics/completed]"), cancellationToken);
             }
-
-            await _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[create/completed]"), cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            await _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[create/cancelled]"), cancellationToken);
         }
         finally
         {
             _lock.Release();
         }
+
+        await _hopperOptions.TransportOperation.InvokeAsync(new(this, "[create/completed]"), cancellationToken);
     }
 
     public async Task DeleteAsync(CancellationToken cancellationToken = default)
     {
-        await _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[delete/starting]"), cancellationToken);
+        await _hopperOptions.TransportOperation.InvokeAsync(new(this, "[delete/starting]"), cancellationToken);
 
         await _lock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
 
         try
         {
-            using (var client = new AdminClientBuilder(new AdminClientConfig
-                   {
-                       BootstrapServers = _kafkaOptions.BootstrapServers
-                   }).Build())
+            using var client = new AdminClientBuilder(new AdminClientConfig
             {
-                var metadata = client.GetMetadata(Topic, _operationTimeout);
+                BootstrapServers = _kafkaOptions.BootstrapServers
+            }).Build();
+            var metadata = client.GetMetadata(Topic, _operationTimeout);
 
-                if (metadata == null)
-                {
-                    return;
-                }
-
-                try
-                {
-                    await client.DeleteTopicsAsync(new List<string>
-                    {
-                        Topic
-                    }, new() { OperationTimeout = _operationTimeout }).ConfigureAwait(false);
-                }
-                catch (DeleteTopicsException)
-                {
-                }
-                catch (AggregateException ex) when (ex.InnerException is DeleteTopicsException)
-                {
-                }
+            if (metadata == null)
+            {
+                return;
             }
-        }
-        catch (OperationCanceledException)
-        {
-            await _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[delete/cancelled]"), cancellationToken);
+
+            try
+            {
+                await client.DeleteTopicsAsync(new List<string>
+                {
+                    Topic
+                }, new() { OperationTimeout = _operationTimeout }).ConfigureAwait(false);
+            }
+            catch (DeleteTopicsException)
+            {
+            }
+            catch (AggregateException ex) when (ex.InnerException is DeleteTopicsException)
+            {
+            }
         }
         finally
         {
             _lock.Release();
         }
 
-        await _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[delete/completed]"), cancellationToken);
+        await _hopperOptions.TransportOperation.InvokeAsync(new(this, "[delete/completed]"), cancellationToken);
     }
 
     public async Task SendAsync(TransportMessage transportMessage, Stream stream, CancellationToken cancellationToken = default)
     {
-        Guard.AgainstNull(transportMessage, nameof(transportMessage));
-        Guard.AgainstNull(stream, nameof(stream));
+        Guard.AgainstNull(transportMessage);
+        Guard.AgainstNull(stream);
 
         await _lock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
 
@@ -284,28 +253,19 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
 
             if (_kafkaOptions.UseCancellationToken)
             {
-                try
-                {
-                    _producer.Flush(cancellationToken);
-                }
-                catch (OperationCanceledException)
-                {
-                }
+                _producer.Flush(cancellationToken);
             }
             else
             {
                 _producer.Flush(_operationTimeout);
             }
-
-            await _serviceBusOptions.MessageSent.InvokeAsync(new(this, transportMessage, stream), cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
         }
         finally
         {
             _lock.Release();
         }
+
+        await _hopperOptions.MessageSent.InvokeAsync(new(this, transportMessage, stream), cancellationToken);
     }
 
     public TransportType Type => TransportType.Stream;
@@ -313,6 +273,8 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
     public async Task<ReceivedMessage?> ReceiveAsync(CancellationToken cancellationToken)
     {
         await _lock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+
+        ReceivedMessage? receivedMessage;
 
         try
         {
@@ -328,26 +290,28 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
 
             ReadMessage(cancellationToken);
 
-            var receivedMessage = _receivedMessages.Count > 0 ? _receivedMessages.Dequeue() : null;
-
-            if (receivedMessage != null)
-            {
-                await _serviceBusOptions.MessageReceived.InvokeAsync(new(this, receivedMessage), cancellationToken);
-            }
-
-            return receivedMessage;
+            receivedMessage = _receivedMessages.Count > 0 ? _receivedMessages.Dequeue() : null;
         }
         finally
         {
             _lock.Release();
         }
+
+        if (receivedMessage != null)
+        {
+            await _hopperOptions.MessageReceived.InvokeAsync(new(this, receivedMessage), cancellationToken);
+        }
+
+        return receivedMessage;
     }
 
     public async ValueTask<bool> HasPendingAsync(CancellationToken cancellationToken = default)
     {
-        await _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[has-pending/starting]"), cancellationToken);
+        await _hopperOptions.TransportOperation.InvokeAsync(new(this, "[has-pending/starting]"), cancellationToken);
 
         await _lock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+
+        bool result;
 
         try
         {
@@ -358,32 +322,26 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
 
             ReadMessage(cancellationToken);
 
-            var result = _receivedMessages.Count > 0;
-
-            await _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[has-pending]", result), cancellationToken);
-
-            return result;
-        }
-        catch (OperationCanceledException)
-        {
-            await _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[has-pending/cancelled]", false), cancellationToken);
+            result = _receivedMessages.Count > 0;
         }
         finally
         {
             _lock.Release();
         }
 
-        return false;
+        await _hopperOptions.TransportOperation.InvokeAsync(new(this, "[has-pending]", result), cancellationToken);
+
+        return result;
     }
 
     public async Task PurgeAsync(CancellationToken cancellationToken = default)
     {
-        await _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[purge/starting]"), cancellationToken);
+        await _hopperOptions.TransportOperation.InvokeAsync(new(this, "[purge/starting]"), cancellationToken);
 
         await DeleteAsync(cancellationToken);
         await CreateAsync(cancellationToken);
 
-        await _serviceBusOptions.TransportOperation.InvokeAsync(new(this, "[purge/completed]"), cancellationToken);
+        await _hopperOptions.TransportOperation.InvokeAsync(new(this, "[purge/completed]"), cancellationToken);
     }
 
     private void ReadMessage(CancellationToken cancellationToken)
@@ -401,15 +359,7 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
             }
         }
 
-        ConsumeResult<Ignore, string>? consumeResult = null;
-
-        try
-        {
-            consumeResult = _kafkaOptions.UseCancellationToken ? _consumer.Consume(cancellationToken) : _consumer.Consume(_kafkaOptions.ConsumeTimeout);
-        }
-        catch (OperationCanceledException)
-        {
-        }
+        var consumeResult = _kafkaOptions.UseCancellationToken ? _consumer.Consume(cancellationToken) : _consumer.Consume(_kafkaOptions.ConsumeTimeout);
 
         if (consumeResult == null)
         {
@@ -438,13 +388,13 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
             }
 
             _receivedMessages.Enqueue(new(new MemoryStream(Convert.FromBase64String(token.ConsumeResult.Message.Value)), acknowledgementToken));
-
-            await _serviceBusOptions.MessageReleased.InvokeAsync(new(this, acknowledgementToken), cancellationToken);
         }
         finally
         {
             _lock.Release();
         }
+
+        await _hopperOptions.MessageReleased.InvokeAsync(new(this, acknowledgementToken), cancellationToken);
     }
 
     internal class AcknowledgementToken(Guid messageId, ConsumeResult<Ignore, string> consumeResult)
