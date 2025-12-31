@@ -7,7 +7,7 @@ public static class HopperBuilderExtensions
 {
     extension(HopperBuilder hopperBuilder)
     {
-        public IServiceCollection UseKafka(Action<KafkaBuilder>? builder = null)
+        public HopperBuilder UseKafka(Action<KafkaBuilder>? builder = null)
         {
             var services = hopperBuilder.Services;
             var kafkaBuilder = new KafkaBuilder(services);
@@ -57,7 +57,7 @@ public static class HopperBuilderExtensions
 
             services.AddSingleton<ITransportFactory, KafkaStreamFactory>();
 
-            return services;
+            return hopperBuilder;
         }
     }
 }
