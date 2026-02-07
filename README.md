@@ -1,49 +1,78 @@
-# Kafka
+# Shuttle.Hopper.Kafka
 
+Kafka implementation for Shuttle.Hopper.
+
+## Installation
+
+```bash
+dotnet add package Shuttle.Hopper.Kafka
 ```
-PM> Install-Package Shuttle.Hopper.Kafka
+
+## Docker Compose
+
+To get a local Kafka broker up and running using the `docker-compose.yml` file in the root of the repository:
+
+```bash
+docker compose up -d
 ```
 
 ## Configuration
 
-The URI structure is `kafka://configuration-name/queue-name`.
+The URI structure is `kafka://configuration-name/topic-name`.
 
 ```c#
-services.AddKafka(builder =>
+services.AddHopper(builder =>
 {
-    var kafkaOptions = new KafkaOptions
+    builder.UseKafka(kafkaBuilder =>
     {
-        BootstrapServers = "localhost:9092",
-        ReplicationFactor = 1,
-        NumPartitions = 1,
-        MessageSendMaxRetries = 3,
-        RetryBackoff = TimeSpan.FromSeconds(1),
-        EnableAutoCommit = false,
-        EnableAutoOffsetStore = false,
-        FlushEnqueue = false,
-        UseCancellationToken = true,
-        ConsumeTimeout = TimeSpan.FromSeconds(30),
-        OperationTimeout = TimeSpan.FromSeconds(30),
-        ConnectionsMaxIdle = TimeSpan.Zero,
-        Acks = Acks.All,
-        EnableIdempotence = true
-    };
+        var kafkaOptions = new KafkaOptions
+        {
+            BootstrapServers = "localhost:9092",
+            ReplicationFactor = 1,
+            NumPartitions = 1,
+            MessageSendMaxRetries = 3,
+            RetryBackoff = TimeSpan.FromSeconds(1),
+            EnableAutoCommit = false,
+            EnableAutoOffsetStore = false,
+            FlushEnqueue = false,
+            UseCancellationToken = true,
+            ConsumeTimeout = TimeSpan.FromSeconds(30),
+            OperationTimeout = TimeSpan.FromSeconds(30),
+            ConnectionsMaxIdle = TimeSpan.Zero,
+            Acks = Acks.All,
+            EnableIdempotence = true
+        };
 
-    kafkaOptions.ConfigureConsumer += (sender, args) =>
-    {
-        Console.WriteLine($"[event] : ConfigureConsumer / Uri = '{((IQueue)sender).Uri}'");
-    };
-
-    kafkaOptions.ConfigureProducer += (sender, args) =>
-    {
-        Console.WriteLine($"[event] : ConfigureProducer / Uri = '{((IQueue)sender).Uri}'");
-    };
-
-    builder.AddOptions("local", kafkaOptions);
+        kafkaBuilder.AddOptions("local", kafkaOptions);
+    });
 });
 ```
 
-The `ConfigureConsumer` event `args` arugment exposes the `ConsumerConfig` directly for any specific options that need to be set.  Similarly, the `ConfigureProducer` event `args` arugment exposes the `ProducerConfig`.
+The documentation for the `Confluent.Kafka` `ConsumerConfig` and `ProducerConfig` can be consulted for specific options. If there are any options that are not exposed via the `KafkaOptions` class, they can be set by providing the relevant configuration object:
+
+```c#
+services.AddHopper(builder =>
+{
+    builder.UseKafka(kafkaBuilder =>
+    {
+        var kafkaOptions = new KafkaOptions
+        {
+            BootstrapServers = "localhost:9092",
+            // ... other properties
+            ConsumerConfig = new ConsumerConfig
+            {
+                // ... Confluent.Kafka specific options
+            },
+            ProducerConfig = new ProducerConfig
+            {
+                // ... Confluent.Kafka specific options
+            }
+        };
+
+        kafkaBuilder.AddOptions("local", kafkaOptions);
+    });
+});
+```
 
 The default JSON settings structure is as follows:
 
@@ -65,7 +94,7 @@ The default JSON settings structure is as follows:
         "OperationTimeout": "00:00:30",
         "ConnectionsMaxIdle": "00:00:00",
         "Acks": "All",
-        "EnableIdempotence": true,
+        "EnableIdempotence": true
       }
     }
   }
@@ -77,9 +106,9 @@ The default JSON settings structure is as follows:
 | Option | Default | Description |
 | --- | --- | --- | 
 | `BootstrapServers` |  | Initial list of brokers as a CSV list of broker host or host:port. |
-| `ReplicationFactor` | 1 | The replication factor for the new topic or -1 (the default) if a replica assignment is specified instead. |
-| `NumPartitions` | 1 | The number of partitions for the new topic or -1 (the default) if a replica assignment is specified. |
-| `MessageSendMaxRetries` | 3 | How many times to retry sending a failing Message. **Note:** retrying may cause reordering unless `enable.idempotence` is set to true. |
+| `ReplicationFactor` | 1 | The replication factor for the new topic. |
+| `NumPartitions` | 1 | The number of partitions for the new topic. |
+| `MessageSendMaxRetries` | 3 | How many times to retry sending a failing Message. |
 | `RetryBackoff` | "00:00:01" | The backoff time before retrying a protocol request. |
 | `EnableAutoCommit` | false | Automatically and periodically commit offsets in the background. |
 | `EnableAutoOffsetStore` | false | Automatically store offset of last message provided to application. |

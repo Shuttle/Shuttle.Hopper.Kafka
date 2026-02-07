@@ -14,12 +14,12 @@
 
   <ItemGroup>
     <PackageReference Include="Confluent.Kafka" Version="2.12.0" />
-    <PackageReference Include="Shuttle.Hopper" Version="21.0.0-alpha" />
+    <PackageReference Include="Shuttle.Hopper" Version="21.0.1-beta" />
   </ItemGroup>
 
   <PropertyGroup>
     <Description>Kafka implementation for use with Shuttle.Hopper.</Description>
-    <Version>21.0.0-alpha</Version>
+    <Version>21.0.1-beta</Version>
     <PackageProjectUrl>https://github.com/Shuttle/Shuttle.Hopper.Kafka</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Shuttle/Shuttle.Hopper.Kafka.git</RepositoryUrl>
     <PackageTags>kafka</PackageTags>
