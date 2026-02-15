@@ -1,7 +1,10 @@
 ﻿using Confluent.Kafka;
 using Confluent.Kafka.Admin;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Shuttle.Core.Contract;
 using Shuttle.Core.Streams;
+using Shuttle.Hopper;
 using System.Net;
 using Exception = System.Exception;
 
@@ -9,6 +12,7 @@ namespace Shuttle.Hopper.Kafka;
 
 public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurgeTransport, IDisposable
 {
+    private readonly ILogger<KafkaStream> _logger;
     private readonly HopperOptions _hopperOptions;
     private readonly IConsumer<Ignore, string> _consumer;
     private readonly ConsumerConfig _consumerConfig;
@@ -23,8 +27,9 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
     private bool _disposed;
     private bool _subscribed;
 
-    public KafkaStream(HopperOptions hopperOptions, KafkaOptions kafkaOptions, TransportUri uri)
+    public KafkaStream(HopperOptions hopperOptions, KafkaOptions kafkaOptions, TransportUri uri, ILogger<KafkaStream>? logger = null)
     {
+        _logger = logger ?? NullLogger<KafkaStream>.Instance;
         _hopperOptions = hopperOptions;
         _kafkaOptions = Guard.AgainstNull(kafkaOptions);
 
@@ -144,11 +149,15 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
             _lock.Release();
         }
 
+        LogMessage.MessageAcknowledged(_logger, Uri.Uri.Scheme, Uri.TransportName);
+
         await _hopperOptions.MessageAcknowledged.InvokeAsync(new(this, acknowledgementToken), cancellationToken);
     }
 
     public async Task CreateAsync(CancellationToken cancellationToken = default)
     {
+        LogMessage.Operation(_logger, Uri.Uri.Scheme, Uri.TransportName, "[create/starting]");
+
         await _hopperOptions.TransportOperation.InvokeAsync(new(this, "[create/starting]"), cancellationToken);
 
         await _lock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
@@ -179,11 +188,15 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
             _lock.Release();
         }
 
+        LogMessage.Operation(_logger, Uri.Uri.Scheme, Uri.TransportName, "[create/completed]");
+
         await _hopperOptions.TransportOperation.InvokeAsync(new(this, "[create/completed]"), cancellationToken);
     }
 
     public async Task DeleteAsync(CancellationToken cancellationToken = default)
     {
+        LogMessage.Operation(_logger, Uri.Uri.Scheme, Uri.TransportName, "[delete/starting]");
+
         await _hopperOptions.TransportOperation.InvokeAsync(new(this, "[delete/starting]"), cancellationToken);
 
         await _lock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
@@ -219,6 +232,8 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
         {
             _lock.Release();
         }
+
+        LogMessage.Operation(_logger, Uri.Uri.Scheme, Uri.TransportName, "[delete/completed]");
 
         await _hopperOptions.TransportOperation.InvokeAsync(new(this, "[delete/completed]"), cancellationToken);
     }
@@ -265,6 +280,8 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
             _lock.Release();
         }
 
+        LogMessage.MessageEnqueued(_logger, Uri.Uri.Scheme, Uri.TransportName, transportMessage.MessageType, transportMessage.MessageId);
+
         await _hopperOptions.MessageSent.InvokeAsync(new(this, transportMessage, stream), cancellationToken);
     }
 
@@ -299,6 +316,8 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
 
         if (receivedMessage != null)
         {
+            LogMessage.MessageReceived(_logger, Uri.Uri.Scheme, Uri.TransportName);
+
             await _hopperOptions.MessageReceived.InvokeAsync(new(this, receivedMessage), cancellationToken);
         }
 
@@ -307,6 +326,8 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
 
     public async ValueTask<bool> HasPendingAsync(CancellationToken cancellationToken = default)
     {
+        LogMessage.Operation(_logger, Uri.Uri.Scheme, Uri.TransportName, "[has-pending/starting]");
+
         await _hopperOptions.TransportOperation.InvokeAsync(new(this, "[has-pending/starting]"), cancellationToken);
 
         await _lock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
@@ -329,6 +350,8 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
             _lock.Release();
         }
 
+        LogMessage.Operation(_logger, Uri.Uri.Scheme, Uri.TransportName, "[has-pending]");
+
         await _hopperOptions.TransportOperation.InvokeAsync(new(this, "[has-pending]", result), cancellationToken);
 
         return result;
@@ -336,10 +359,14 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
 
     public async Task PurgeAsync(CancellationToken cancellationToken = default)
     {
+        LogMessage.Operation(_logger, Uri.Uri.Scheme, Uri.TransportName, "[purge/starting]");
+
         await _hopperOptions.TransportOperation.InvokeAsync(new(this, "[purge/starting]"), cancellationToken);
 
         await DeleteAsync(cancellationToken);
         await CreateAsync(cancellationToken);
+
+        LogMessage.Operation(_logger, Uri.Uri.Scheme, Uri.TransportName, "[purge/completed]");
 
         await _hopperOptions.TransportOperation.InvokeAsync(new(this, "[purge/completed]"), cancellationToken);
     }
@@ -393,6 +420,8 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
         {
             _lock.Release();
         }
+
+        LogMessage.MessageReleased(_logger, Uri.Uri.Scheme, Uri.TransportName);
 
         await _hopperOptions.MessageReleased.InvokeAsync(new(this, acknowledgementToken), cancellationToken);
     }
