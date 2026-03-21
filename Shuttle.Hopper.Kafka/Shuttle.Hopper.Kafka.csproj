@@ -19,7 +19,7 @@
 
   <PropertyGroup>
     <Description>Kafka implementation for use with Shuttle.Hopper.</Description>
-    <Version>21.0.1-rc1</Version>
+    <Version>21.0.1-rc2</Version>
     <PackageProjectUrl>https://github.com/Shuttle/Shuttle.Hopper.Kafka</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Shuttle/Shuttle.Hopper.Kafka.git</RepositoryUrl>
     <PackageTags>kafka</PackageTags>
