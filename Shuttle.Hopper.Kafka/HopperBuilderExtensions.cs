@@ -10,33 +10,17 @@ public static class HopperBuilderExtensions
         public HopperBuilder UseKafka(Action<KafkaBuilder>? builder = null)
         {
             var services = hopperBuilder.Services;
-            var kafkaBuilder = new KafkaBuilder(services);
+            var kafkaBuilder = new KafkaBuilder();
 
             builder?.Invoke(kafkaBuilder);
 
             services.AddSingleton<IValidateOptions<KafkaOptions>, KafkaOptionsValidator>();
 
-            foreach (var pair in kafkaBuilder.KafkaOptions)
+            foreach (var pair in kafkaBuilder.KafkaConfigureOptions)
             {
                 services.AddOptions<KafkaOptions>(pair.Key).Configure(options =>
                 {
-                    options.ConsumerBuilder = pair.Value.ConsumerBuilder;
-                    options.ProducerBuilder = pair.Value.ProducerBuilder;
-                    options.ConsumerConfig = pair.Value.ConsumerConfig;
-                    options.ProducerConfig = pair.Value.ProducerConfig;
-
-                    options.BootstrapServers = pair.Value.BootstrapServers;
-                    options.MessageSendMaxRetries = pair.Value.MessageSendMaxRetries;
-                    options.NumPartitions = pair.Value.NumPartitions;
-                    options.ReplicationFactor = pair.Value.ReplicationFactor;
-                    options.RetryBackoff = pair.Value.RetryBackoff;
-                    options.EnableAutoCommit = pair.Value.EnableAutoCommit;
-                    options.EnableAutoOffsetStore = pair.Value.EnableAutoOffsetStore;
-                    options.FlushEnqueue = pair.Value.FlushEnqueue;
-                    options.UseCancellationToken = pair.Value.UseCancellationToken;
-                    options.ConsumeTimeout = pair.Value.ConsumeTimeout;
-                    options.ConnectionsMaxIdle = pair.Value.ConnectionsMaxIdle;
-                    options.OperationTimeout = pair.Value.OperationTimeout;
+                    pair.Value(options);
 
                     if (options.ConsumeTimeout < TimeSpan.FromMilliseconds(25))
                     {

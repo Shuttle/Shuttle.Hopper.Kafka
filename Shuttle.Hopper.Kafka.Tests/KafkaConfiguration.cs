@@ -1,6 +1,5 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Shuttle.Core.Contract;
 
 namespace Shuttle.Hopper.Kafka.Tests;
 
@@ -12,21 +11,17 @@ public class KafkaConfiguration
 
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
 
-        services.AddHopper(hopperBuilder =>
-        {
-            hopperBuilder.UseKafka(builder =>
+        services.AddHopper()
+            .UseKafka(builder =>
             {
-                var kafkaOptions = new KafkaOptions
+                builder.Configure("local", options =>
                 {
-                    BootstrapServers = "localhost:9092",
-                    UseCancellationToken = useCancellationToken,
-                    ConsumeTimeout = TimeSpan.FromSeconds(5),
-                    ConnectionsMaxIdle = TimeSpan.FromSeconds(5)
-                };
-
-                builder.AddOptions("local", kafkaOptions);
+                    options.BootstrapServers = "localhost:9092";
+                    options.UseCancellationToken = useCancellationToken;
+                    options.ConsumeTimeout = TimeSpan.FromSeconds(5);
+                    options.ConnectionsMaxIdle = TimeSpan.FromSeconds(5);
+                });
             });
-        });
 
         return services;
     }
