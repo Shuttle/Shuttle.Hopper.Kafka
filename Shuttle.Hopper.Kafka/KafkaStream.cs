@@ -2,10 +2,10 @@
 using Confluent.Kafka.Admin;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Shuttle.Core.Contract;
-using Shuttle.Core.Streams;
-using Shuttle.Hopper;
+using Shuttle.Contract;
+using Shuttle.Streams;
 using System.Net;
+using Shuttle.Pipelines;
 using Exception = System.Exception;
 
 namespace Shuttle.Hopper.Kafka;
@@ -238,10 +238,12 @@ public class KafkaStream : ITransport, ICreateTransport, IDeleteTransport, IPurg
         await _hopperOptions.TransportOperation.InvokeAsync(new(this, "[delete/completed]"), cancellationToken);
     }
 
-    public async Task SendAsync(TransportMessage transportMessage, Stream stream, CancellationToken cancellationToken = default)
+    public async Task SendAsync(Stream stream, IState state, CancellationToken cancellationToken = default)
     {
-        Guard.AgainstNull(transportMessage);
-        Guard.AgainstNull(stream);
+        ArgumentNullException.ThrowIfNull(stream);
+        ArgumentNullException.ThrowIfNull(state);
+
+        var transportMessage = Guard.AgainstNull(state.GetTransportMessage());
 
         await _lock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
 
