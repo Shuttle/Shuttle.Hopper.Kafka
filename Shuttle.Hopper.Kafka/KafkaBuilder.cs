@@ -1,18 +1,17 @@
-﻿using Shuttle.Contract;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Shuttle.Contract;
 
 namespace Shuttle.Hopper.Kafka;
 
-public class KafkaBuilder
+public class KafkaBuilder(IServiceCollection services)
 {
     internal readonly Dictionary<string, Action<KafkaOptions>> KafkaConfigureOptions = new();
 
     public KafkaBuilder Configure(string name, Action<KafkaOptions> configureOptions)
     {
-        Guard.AgainstEmpty(name);
-        Guard.AgainstNull(configureOptions);
-
-        KafkaConfigureOptions.Remove(name);
-        KafkaConfigureOptions.Add(name, configureOptions);
+        Guard.AgainstNull(services)
+            .AddOptions<KafkaOptions>(Guard.AgainstEmpty(name))
+            .Configure(Guard.AgainstNull(configureOptions));
 
         return this;
     }
