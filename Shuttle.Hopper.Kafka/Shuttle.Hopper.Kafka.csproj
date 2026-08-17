@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -19,7 +19,7 @@
 
   <PropertyGroup>
     <Description>Kafka implementation for use with Shuttle.Hopper.</Description>
-    <Version>22.0.0-alpha.1</Version>
+    <Version>22.0.0</Version>
     <PackageProjectUrl>https://github.com/Shuttle/Shuttle.Hopper.Kafka</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Shuttle/Shuttle.Hopper.Kafka.git</RepositoryUrl>
     <PackageTags>kafka</PackageTags>
