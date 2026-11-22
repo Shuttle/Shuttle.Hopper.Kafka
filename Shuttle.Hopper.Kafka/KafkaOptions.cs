@@ -4,7 +4,7 @@ namespace Shuttle.Hopper.Kafka;
 
 public class KafkaOptions
 {
-    public const string SectionName = "Shuttle:Kafka";
+    public const string SectionName = "Shuttle:Hopper:Kafka";
     public Acks Acks { get; set; } = Acks.All;
 
     public string BootstrapServers { get; set; } = string.Empty;
